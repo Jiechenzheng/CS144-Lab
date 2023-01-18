@@ -5,6 +5,11 @@
         "istream": "cpp",
         "sstream": "cpp",
         "streambuf": "cpp",
-        "ostream": "cpp"
+        "ostream": "cpp",
+        "limits": "cpp",
+        "optional": "cpp",
+        "iostream": "cpp",
+        "type_traits": "cpp",
+        "variant": "cpp"
     }
 }
