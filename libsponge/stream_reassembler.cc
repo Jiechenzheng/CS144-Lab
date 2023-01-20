@@ -1,4 +1,5 @@
 #include "stream_reassembler.hh"
+#include "log.h"
 
 // Dummy implementation of a stream reassembler.
 
