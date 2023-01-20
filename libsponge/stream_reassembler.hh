@@ -21,6 +21,8 @@ class StreamReassembler {
     bool _eof;
     int _last_byte_index;
 
+    void check_contiguous();
+
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
     //! \note This capacity limits both the bytes that have been reassembled,
@@ -36,8 +38,6 @@ class StreamReassembler {
     //! \param index indicates the index (place in sequence) of the first byte in `data`
     //! \param eof the last byte of `data` will be the last byte in the entire stream
     void push_substring(const std::string &data, const uint64_t index, const bool eof);
-
-    void check_contiguous();
 
     //! \name Access the reassembled byte stream
     //!@{
