@@ -14,7 +14,6 @@ using namespace std;
 
 StreamReassembler::StreamReassembler(const size_t capacity) :
     _unreass_buffer(0),
-    _bitmap(0),
     _first_unreass_index(0),
     _unreass_cap(0),
     _output(capacity),
@@ -41,25 +40,25 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
     size_t ptr = _first_unreass_index;
     while (ptr < end_string_index)
     {
-        if (ptr < index)
+        if (ptr < index)    // when first byte of data is not the first unreass index
         {
-            if ((ptr - _first_unreass_index) >= _unreass_buffer.size()) // when no capacity in the queue
+            // when the capaity in the queue is not enought, add one
+            if ((ptr - _first_unreass_index) >= _unreass_buffer.size())
             {
-                _unreass_buffer.push_back('\0');
-                _bitmap.push_back(false);
+                _unreass_buffer.push_back(std::make_pair('\0', false));
             }
             ptr++;
         }
-        else {
+        else {      // when first byte of data is just right the first unreass index
+            // when the capaity in the queue is not enought, add one
             if ((ptr - _first_unreass_index) >= _unreass_buffer.size())
             {
-                _unreass_buffer.push_back(data[ptr - index]);
-                _bitmap.push_back(true);
+                _unreass_buffer.push_back(std::make_pair(data[ptr - index], true));
             }
-            else
+            else    // when the position is previous mark to false, modify it
             {
-                _unreass_buffer[ptr - _first_unreass_index] = data[ptr - index];
-                _bitmap[ptr - _first_unreass_index] = true;
+                _unreass_buffer[ptr - _first_unreass_index].first = data[ptr - index];
+                _unreass_buffer[ptr - _first_unreass_index].second = true;
             }
             ptr++;
         }
@@ -73,11 +72,10 @@ void StreamReassembler::push_substring(const string &data, const size_t index, c
 
 void StreamReassembler::check_contiguous(){
     std::string tmp = "";
-    while (_bitmap.size() && _bitmap.front())
+    while (_unreass_buffer.size() && _unreass_buffer.front().second)
     {
-        tmp += _unreass_buffer.front();
+        tmp += _unreass_buffer.front().first;
         _unreass_buffer.pop_front();
-        _bitmap.pop_front();
         _first_unreass_index++;
     }
 
@@ -94,14 +92,12 @@ void StreamReassembler::check_contiguous(){
 size_t StreamReassembler::unassembled_bytes() const {
     size_t count = 0;
 
-    for (auto it = _bitmap.begin(); it != _bitmap.end(); it++)
-    {
-        if (*it) count++;
-    }
+    for (auto it = _unreass_buffer.begin(); it != _unreass_buffer.end(); it++)
+        if ((*it).second) count++;
 
     return count;
 }
 
 bool StreamReassembler::empty() const {
-    return _bitmap.size() ? false : true;
+    return _unreass_buffer.size() ? false : true;
 }

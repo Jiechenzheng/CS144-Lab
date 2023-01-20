@@ -6,14 +6,14 @@
 #include <cstdint>
 #include <deque>
 #include <string>
+#include <utility>
 
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
 class StreamReassembler {
   private:
     // Your code here -- add private members as necessary.
-    std::deque<char> _unreass_buffer;
-    std::deque<bool> _bitmap;
+    std::deque<std::pair<char, bool>> _unreass_buffer;
     size_t _first_unreass_index;
     size_t _unreass_cap;
     ByteStream _output;  //!< The reassembled in-order byte stream
