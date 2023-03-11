@@ -10,6 +10,8 @@
         "optional": "cpp",
         "iostream": "cpp",
         "type_traits": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "memory_resource": "cpp",
+        "memory": "cpp"
     }
 }

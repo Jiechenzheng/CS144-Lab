@@ -2,12 +2,42 @@
 #define SPONGE_LIBSPONGE_TCP_SENDER_HH
 
 #include "byte_stream.hh"
+#include "log.h"
 #include "tcp_config.hh"
 #include "tcp_segment.hh"
 #include "wrapping_integers.hh"
 
 #include <functional>
 #include <queue>
+
+class Timer {
+  private:
+    time_t _retx_timeout;
+    time_t _time_passed{0};
+    bool _if_start{false};
+
+  public:
+    Timer(const time_t rto): _retx_timeout(rto){}
+
+    void start() { _time_passed = 0; _if_start = true; return; }
+
+    void restart() { _time_passed = 0; _if_start = true; return; }
+
+    time_t time_passed() const { return _time_passed; }
+
+    time_t &time_passed() { return _time_passed; }
+
+    bool if_start() const { return _if_start; }
+
+    bool &if_start() { return _if_start; }
+
+    void setRTO(time_t rto) { _retx_timeout = rto; return; }
+
+    time_t getRTO() const { return _retx_timeout; }
+
+    time_t get_retx_timeout() const { return _retx_timeout; }
+};
+
 
 //! \brief The "sender" part of a TCP implementation.
 
@@ -23,14 +53,39 @@ class TCPSender {
     //! outbound queue of segments that the TCPSender wants sent
     std::queue<TCPSegment> _segments_out{};
 
+    //! segment be sent but not acknoledged yet
+    std::queue<TCPSegment> _outstanding_segments{};
+
     //! retransmission timer for the connection
     unsigned int _initial_retransmission_timeout;
+
+    //! timer for tick
+    Timer _timer;
 
     //! outgoing stream of bytes that have not yet been sent
     ByteStream _stream;
 
     //! the (absolute) sequence number for the next byte to be sent
     uint64_t _next_seqno{0};
+
+    uint64_t _least_abs_seqno_not_acked{0};
+
+    // the window size of receiver
+    size_t _rcv_window_size{1};
+
+    size_t _rcv_window_free_space{0};
+
+    // if it is the first segment
+    bool _first_send{true};
+
+    bool _fin_sent{false};
+
+    // stream bytes in flight
+    size_t _bytes_in_flight{0};
+
+    uint64_t _checkpoint{0};
+
+    unsigned int _consecutive_retransmissions{0};
 
   public:
     //! Initialize a TCPSender
@@ -55,6 +110,13 @@ class TCPSender {
 
     //! \brief create and send segments to fill as much of the window as possible
     void fill_window();
+
+    //! \brief send test segment when no window size from receiver
+    // cannot be sent to outstanding, as it will affect the counting of _bytes_in_flight
+    void send_test_segment();
+
+    //! \brief make a segment
+    TCPSegment make_segment(size_t len, bool test = false);
 
     //! \brief Notifies the TCPSender of the passage of time
     void tick(const size_t ms_since_last_tick);
