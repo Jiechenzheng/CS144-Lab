@@ -21,6 +21,16 @@ class TCPConnection {
     //! in case the remote TCPConnection doesn't know we've received its whole stream?
     bool _linger_after_streams_finish{true};
 
+    bool _is_lingering{false};
+
+    bool _active{true};
+
+    bool _first{true};
+
+    bool _outbound_fin_acked{false};
+
+    Timer _timer;
+
   public:
     //! \name "Input" interface for the writer
     //!@{
@@ -45,6 +55,14 @@ class TCPConnection {
     //! \brief The inbound byte stream received from the peer
     ByteStream &inbound_stream() { return _receiver.stream_out(); }
     //!@}
+
+    bool inbound_stream_ended() {
+        return _receiver.stream_out().input_ended() == true; }
+
+    bool outbound_stream_ended_fin_sent_acked() {
+        return (_sender.stream_in().eof() == true &&
+                _sender.least_abs_seqno_not_acked() > _sender.stream_in().bytes_written() + 1);
+    }
 
     //! \name Accessors used for testing
 
@@ -78,10 +96,11 @@ class TCPConnection {
     //! \returns `true` if either stream is still running or if the TCPConnection is lingering
     //! after both streams have finished (e.g. to ACK retransmissions from the peer)
     bool active() const;
+    bool &active();
     //!@}
 
     //! Construct a new connection from a configuration
-    explicit TCPConnection(const TCPConfig &cfg) : _cfg{cfg} {}
+    explicit TCPConnection(const TCPConfig &cfg) : _cfg{cfg}, _timer(_cfg.rt_timeout) {}
 
     //! \name construction and destruction
     //! moving is allowed; copying is disallowed; default construction not possible

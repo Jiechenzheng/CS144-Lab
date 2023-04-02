@@ -23,6 +23,7 @@ class Timer {
 
     void restart() { _time_passed = 0; _if_start = true; return; }
 
+    // return passed time
     time_t time_passed() const { return _time_passed; }
 
     time_t &time_passed() { return _time_passed; }
@@ -149,6 +150,8 @@ class TCPSender {
     //! \brief relative seqno for the next byte to be sent
     WrappingInt32 next_seqno() const { return wrap(_next_seqno, _isn); }
     //!@}
+
+    uint64_t least_abs_seqno_not_acked() const { return _least_abs_seqno_not_acked; }
 };
 
 #endif  // SPONGE_LIBSPONGE_TCP_SENDER_HH

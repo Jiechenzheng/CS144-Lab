@@ -32,7 +32,7 @@ void TCPReceiver::segment_received(const TCPSegment &seg) {
 
         /* write data, along with fin flag if has */
         uint64_t index = std::max(static_cast<int64_t>(abs_seqno) - 1, 0l); // this is index in byte stream
-        
+
         _reassembler.push_substring(seg.payload().copy(), index, header.fin);
 
         /* set ackno, according to first unressambled byte */
@@ -51,8 +51,6 @@ optional<WrappingInt32> TCPReceiver::ackno() const {
         return {};
     else
         return _ackno.value();
-    
-    
  }
 
 size_t TCPReceiver::window_size() const { 

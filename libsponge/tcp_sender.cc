@@ -118,7 +118,7 @@ TCPSegment TCPSender::make_segment(size_t len, bool test) {
         }
 
         /* if the last segment, set fin flag */
-        if (_stream.eof() && seg.length_in_sequence_space() < _rcv_window_free_space)
+        if (_fin_sent == false && _stream.eof() && seg.length_in_sequence_space() < _rcv_window_free_space)
         {
             seg.header().fin = true;
             _fin_sent = true;
@@ -151,10 +151,10 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
         _rcv_window_size = window_size;
         if (_rcv_window_size == 0)
         {
-            send_test_segment();
+            send_test_segment();    // send test segment just keep alive
             return;
         }
-        else
+        else    // though this ackno is in flight, there appearing more window size
         {
             fill_window();
             return;
