@@ -37,6 +37,8 @@ class Timer {
     time_t getRTO() const { return _retx_timeout; }
 
     time_t get_retx_timeout() const { return _retx_timeout; }
+
+    void stop() { _time_passed = 0; _if_start = false; return; }
 };
 
 

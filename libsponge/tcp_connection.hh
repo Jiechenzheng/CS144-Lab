@@ -25,9 +25,9 @@ class TCPConnection {
 
     bool _active{true};
 
-    bool _first{true};
+    // bool _first{true};
 
-    bool _outbound_fin_acked{false};
+    // bool _inbound_fin_acked{false};
 
     Timer _timer;
 

@@ -36,12 +36,23 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     }
 
     /* if it is the first segment with syn, no ack received, so we need to active send one */
-    if (_first == true && header.syn == true)
+    if (header.ack == false)
     {
-        _first = false;
+        if (header.syn == false)
+        {
+            sponge_log(LOG_ERR, "there expected to be a syn");
+            return;
+        }
 
         _receiver.segment_received(seg);
         _sender.fill_window();
+
+        // if segment_out is empty, generate an empty segment, seg.length_in_sequence_space() != 0 is to filter only ack segment
+        if (_sender.segments_out().empty() == true && seg.length_in_sequence_space() != 0)
+        {
+            _sender.send_empty_segment();
+            _sender.segments_out().front().header().seqno = _sender.next_seqno();
+        }
 
         while (_sender.segments_out().empty() == false)
         {
@@ -51,51 +62,40 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
             segment_out.header().ackno = _receiver.ackno().value();
             segment_out.header().win = _receiver.window_size();
             segment_out.header().ack = true;
+
             _segments_out.push(segment_out);
         }
     }
     else    // not the first segment
     {
         _receiver.segment_received(seg);
-        if (header.ack == true)
+
+        const WrappingInt32 outbound_ackno = header.ackno;
+        const size_t outbound_win = header.win;
+
+        // give sender the akcno and windows calculate by remote peer
+        _sender.ack_received(outbound_ackno, outbound_win);
+
+        // if segment_out is empty, generate a empty segment, seg.length_in_sequence_space() != 0 is to filter only ack segment
+        if (_sender.segments_out().empty() == true && seg.length_in_sequence_space() != 0)
         {
-            const WrappingInt32 outbound_ackno = header.ackno;
-            const size_t outbound_win = header.win;
-
-            // give sender the akcno and windows calculate by remote peer
-            _sender.ack_received(outbound_ackno, outbound_win);
-
-            // if segment_out is empty, generate a empty segment
-            if (_sender.segments_out().empty() == true && _outbound_fin_acked == false)
-            {
-                _sender.send_empty_segment();
-                _sender.segments_out().front().header().seqno = _sender.next_seqno();
-            }
-            
-            // populate the fields and send out
-            while (_sender.segments_out().empty() == false)
-            {
-                TCPSegment segment_out = _sender.segments_out().front();
-                _sender.segments_out().pop();
-                segment_out.header().ackno = _receiver.ackno().value();
-                segment_out.header().win = _receiver.window_size();
-                segment_out.header().ack = true;
-
-                _segments_out.push(segment_out);
-            }
+            _sender.send_empty_segment();
+            _sender.segments_out().front().header().seqno = _sender.next_seqno();
         }
-        else
+        
+        // populate the fields and send out
+        while (_sender.segments_out().empty() == false)
         {
-            sponge_log(LOG_ERR, "Expect ack in received segment, but no");
-        }
-    }
+            TCPSegment segment_out = _sender.segments_out().front();
+            _sender.segments_out().pop();
+            segment_out.header().ackno = _receiver.ackno().value();
+            segment_out.header().win = _receiver.window_size();
+            segment_out.header().ack = true;
 
-    // if inbound stream have fin sent, assume we sent an ack already
-    if (_receiver.stream_out().input_ended() == true)
-    {
-        _outbound_fin_acked = true;
+            _segments_out.push(segment_out);
+        }
+
     }
-    
 
     /* if passive tear down */
     if (_receiver.stream_out().input_ended() == true && _sender.stream_in().eof() == false)
@@ -193,7 +193,6 @@ void TCPConnection::end_input_stream() {
 }
 
 void TCPConnection::connect() {
-    _first = false;
     _sender.fill_window();
 
     if (_sender.segments_out().empty() == false)

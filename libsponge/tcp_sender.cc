@@ -187,6 +187,10 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
             {
                 _timer.restart();
             }
+            else
+            {
+                _timer.stop();
+            }
 
             _consecutive_retransmissions = 0;
             return;
@@ -205,18 +209,31 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
             {
                 _timer.restart();
             }
+            else
+            {
+                _timer.stop();
+            }
             
             _consecutive_retransmissions = 0;
             return;
         }
     }
-    
+
+    // if (_outstanding_segments.empty() == true)
+    // {
+    //     _timer.stop();
+    // }
+
     return;
 }
 
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
 void TCPSender::tick(const size_t ms_since_last_tick) {
-    _timer.time_passed() += ms_since_last_tick;
+    if (_timer.if_start() == true)
+    {
+        _timer.time_passed() += ms_since_last_tick;
+    }
+    
     time_t time_passed = _timer.time_passed();
 
     /* compare with RTO, if larger, resend the segment */
