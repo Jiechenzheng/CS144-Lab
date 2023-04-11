@@ -104,7 +104,8 @@ TCPSegment TCPSender::make_segment(size_t len, bool test) {
         payload = _stream.read(len);
         TCPSegment seg;
         // seg.payload() = Buffer{_stream.read(len)};
-        seg.payload() = Buffer(payload.data());    // ??
+        seg.payload() = Buffer(payload);
+
         if (_first_send == true)    // the first segment
         {
             seg.header().syn = true;

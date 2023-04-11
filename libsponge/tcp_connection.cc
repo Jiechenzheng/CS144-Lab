@@ -125,6 +125,22 @@ bool &TCPConnection::active() { return _active; }
 size_t TCPConnection::write(const string &data) {
     ByteStream &bs = _sender.stream_in();
     size_t res = bs.write(data);
+
+    // send the bytes over TCP if possible
+    // shouldn't fill_window if establishment hasn't done, in this case, window size would be zero, so don't worry
+    _sender.fill_window();
+
+    // if more segments are generated populate the fields and send out
+    while (_sender.segments_out().empty() == false)
+    {
+        TCPSegment segment_out = _sender.segments_out().front();
+        _sender.segments_out().pop();
+        segment_out.header().ackno = _receiver.ackno().value();
+        segment_out.header().win = _receiver.window_size();
+        segment_out.header().ack = true;
+        _segments_out.push(segment_out);
+    }
+
     return res;
 }
 
@@ -135,6 +151,28 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
 
     /* pass the time to sender, send out if sender send new segs */
     _sender.tick(ms_since_last_tick);
+
+    /* if consective retransmission larger than the limit*/
+    if (_sender.consecutive_retransmissions() > _cfg.MAX_RETX_ATTEMPTS)
+    {
+        // send segment with RST and abort the connection
+        _sender.send_empty_segment();
+        TCPSegment seg = _sender.segments_out().front();
+        _sender.segments_out().pop();
+        seg.header().seqno = _sender.next_seqno();
+        seg.header().rst = true;
+        _segments_out.push(seg);
+
+        // set error for streams
+        _sender.stream_in().set_error();
+        _receiver.stream_out().set_error();
+
+        // end the connection
+        active() = false;
+
+        return;
+    }
+
     while (_sender.segments_out().empty() == false)
     {
         TCPSegment segment_out = _sender.segments_out().front();
@@ -147,27 +185,13 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
         _segments_out.push(segment_out);
     }
 
-    /* if consective retransmission larger than the limit*/
-    if (_sender.consecutive_retransmissions() >= _cfg.MAX_RETX_ATTEMPTS)
-    {
-        // send segment with RST and abort the connection
-        _sender.send_empty_segment();
-        TCPSegment seg = _sender.segments_out().front();
-        _sender.segments_out().pop();
-        seg.header().seqno = _sender.next_seqno();
-        seg.header().rst = true;
-        _segments_out.push(seg);
-
-        // end the connection
-        active() = false;
-    }
-
     /* if lingering time is passed, cleanly end the connection */
     if (_is_lingering && time_since_last_segment_received() >= 10 * _cfg.rt_timeout)
     {
         active() = false;
     }
     
+    return;
 }
 
 void TCPConnection::end_input_stream() {
