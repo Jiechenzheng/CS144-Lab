@@ -32,10 +32,10 @@ int main() {
             test.execute(SubmitSegment{"ab", 0});
             test.execute(BytesAssembled(2));
 
-            test.execute(SubmitSegment{"cd", 2});
+            test.execute(SubmitSegment{"cd", 2});   // discard
             test.execute(BytesAssembled(2));
 
-            test.execute(BytesAvailable("ab"));
+            test.execute(BytesAvailable("ab"));     // read
             test.execute(BytesAssembled(2));
 
             test.execute(SubmitSegment{"cd", 2});
