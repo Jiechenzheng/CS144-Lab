@@ -4,9 +4,16 @@
 #include "ethernet_frame.hh"
 #include "tcp_over_ip.hh"
 #include "tun.hh"
+#include "tcp_sender.hh"
 
 #include <optional>
 #include <queue>
+#include <map>
+#include <utility>
+
+
+#define LIFETIME_IN_ADDR_MAPPING 30000  // 30 seconds
+#define ARP_RETX_TIMEOUT 5000   // 5 seconds
 
 //! \brief A "network interface" that connects IP (the internet layer, or network layer)
 //! with Ethernet (the network access layer, or link layer).
@@ -40,6 +47,14 @@ class NetworkInterface {
     //! outbound queue of Ethernet frames that the NetworkInterface wants sent
     std::queue<EthernetFrame> _frames_out{};
 
+    // outbound queue of IP datagram
+    std::vector<std::pair<InternetDatagram, Address>> _internet_datagram_out{};
+
+    // cache mapping of IP addr and Ethernet addr
+    std::map<uint32_t, std::pair<EthernetAddress, int>> _addr_mapping{};
+
+    // timer for tick
+    Timer _timer;
   public:
     //! \brief Construct a network interface with given Ethernet (network-access-layer) and IP (internet-layer) addresses
     NetworkInterface(const EthernetAddress &ethernet_address, const Address &ip_address);
@@ -53,12 +68,21 @@ class NetworkInterface {
     //! ("Sending" is accomplished by pushing the frame onto the frames_out queue.)
     void send_datagram(const InternetDatagram &dgram, const Address &next_hop);
 
+    void send_IP_datagram(const InternetDatagram &dgram, const EthernetAddress &next_hop_ethernet_addr);
+
+    void send_ARP_datagram_request(const Address &next_hop);
+    void send_ARP_datagram_reply(const uint32_t &next_hop);
+
     //! \brief Receives an Ethernet frame and responds appropriately.
 
     //! If type is IPv4, returns the datagram.
     //! If type is ARP request, learn a mapping from the "sender" fields, and send an ARP reply.
     //! If type is ARP reply, learn a mapping from the "sender" fields.
     std::optional<InternetDatagram> recv_frame(const EthernetFrame &frame);
+
+    std::optional<InternetDatagram> recv_IP_datagram(const EthernetFrame &frame);
+
+    void recv_ARP_datagram(const EthernetFrame &frame);
 
     //! \brief Called periodically when time elapses
     void tick(const size_t ms_since_last_tick);
