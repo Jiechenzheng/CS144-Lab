@@ -50,7 +50,7 @@ optional<WrappingInt32> TCPReceiver::ackno() const {
     if (!_isn.has_value())
         return {};
     else
-        return _ackno.value();
+        return _ackno;
  }
 
 size_t TCPReceiver::window_size() const { 

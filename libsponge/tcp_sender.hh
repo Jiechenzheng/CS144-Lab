@@ -26,11 +26,11 @@ class Timer {
     // return passed time
     time_t time_passed() const { return _time_passed; }
 
-    time_t &time_passed() { return _time_passed; }
+    void update_time_by_last_time_passed(time_t val) { _time_passed += val; return; }
 
     bool if_start() const { return _if_start; }
 
-    bool &if_start() { return _if_start; }
+    void set_start(bool val) { _if_start = val; return; }
 
     void setRTO(time_t rto) { _retx_timeout = rto; return; }
 
@@ -154,6 +154,8 @@ class TCPSender {
     //!@}
 
     uint64_t least_abs_seqno_not_acked() const { return _least_abs_seqno_not_acked; }
+
+    uint32_t get_isn() const { return _isn.raw_value(); }
 };
 
 #endif  // SPONGE_LIBSPONGE_TCP_SENDER_HH

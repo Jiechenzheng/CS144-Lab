@@ -13,6 +13,7 @@
         "variant": "cpp",
         "memory_resource": "cpp",
         "memory": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "exception": "cpp"
     }
 }

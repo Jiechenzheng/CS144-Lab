@@ -46,7 +46,7 @@ void TCPSender::fill_window() {
         _segments_out.push(seg);
         _outstanding_segments.push(seg);
 
-        if (!_timer.if_start()) _timer.if_start() = true;
+        if (!_timer.if_start()) _timer.set_start(true);
         
         _rcv_window_free_space -= seg.length_in_sequence_space();
     }
@@ -68,7 +68,7 @@ void TCPSender::send_test_segment() {
         _segments_out.push(seg);
         _outstanding_segments.push(seg);
         if (!_timer.if_start())
-            _timer.if_start() = true;
+            _timer.set_start(true);
     } else {
         return;
     }
@@ -137,7 +137,7 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
     /* check invalid ackno */
     if (abs_ackno > _next_seqno)
     {
-        sponge_log(LOG_ERR, "impossible ackno number: it is larger than _next_seqno");
+        sponge_log(LOG_ERR, "impossible ackno number: it is larger than _next_seqno. abs_ackno: %lu, _next_seqno: %lu", abs_ackno, _next_seqno);
         return;
     }
 
@@ -152,7 +152,11 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
         _rcv_window_size = window_size;
         if (_rcv_window_size == 0)
         {
-            send_test_segment();    // send test segment just keep alive
+            // resend segment from the queue
+            if (_outstanding_segments.empty() == false)
+                _segments_out.push(_outstanding_segments.front());
+            else
+                send_test_segment();    // send test segment just keep alive
             return;
         }
         else    // though this ackno is in flight, there appearing more window size
@@ -178,7 +182,11 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
 
         if (_rcv_window_size == 0)  // window size == 0, send only 1 byte test_segment
         {
-            send_test_segment();
+            // resend segment from the queue
+            if (_outstanding_segments.empty() == false)
+                _segments_out.push(_outstanding_segments.front());
+            else
+                send_test_segment();    // send test segment just keep alive
             // _timer.setRTO(_initial_retransmission_timeout);
 
             _checkpoint = _least_abs_seqno_not_acked;
@@ -232,7 +240,7 @@ void TCPSender::ack_received(const WrappingInt32 ackno, const uint16_t window_si
 void TCPSender::tick(const size_t ms_since_last_tick) {
     if (_timer.if_start() == true)
     {
-        _timer.time_passed() += ms_since_last_tick;
+        _timer.update_time_by_last_time_passed(ms_since_last_tick);
     }
     
     time_t time_passed = _timer.time_passed();
@@ -240,7 +248,8 @@ void TCPSender::tick(const size_t ms_since_last_tick) {
     /* compare with RTO, if larger, resend the segment */
     if (time_passed >= _timer.get_retx_timeout() && !_outstanding_segments.empty())
     {
-        _segments_out.push(_outstanding_segments.front());
+        if (_outstanding_segments.empty() == false)_segments_out.push(_outstanding_segments.front());
+
         if (_rcv_window_size != 0)
         {
             _consecutive_retransmissions++;

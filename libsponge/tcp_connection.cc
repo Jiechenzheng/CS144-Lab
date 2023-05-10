@@ -31,7 +31,7 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
         _sender.stream_in().set_error();
         _receiver.stream_out().set_error();
 
-        active() = false;
+        set_active(false);
         return;
     }
 
@@ -44,6 +44,7 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
             return;
         }
 
+        sponge_log(LOG_INFO, "passive connection from peer, %d", seg.header().sport);
         _receiver.segment_received(seg);
         _sender.fill_window();
 
@@ -59,9 +60,11 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
             TCPSegment segment_out = _sender.segments_out().front();
             _sender.segments_out().pop();
             // set ackno and window size calculated by receiver
-            segment_out.header().ackno = _receiver.ackno().value();
+            if (_receiver.ackno().has_value()) {
+                segment_out.header().ackno = _receiver.ackno().value();
+                segment_out.header().ack = true;
+            }
             segment_out.header().win = _receiver.window_size();
-            segment_out.header().ack = true;
 
             _segments_out.push(segment_out);
         }
@@ -76,28 +79,30 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
         // give sender the akcno and windows calculate by remote peer
         _sender.ack_received(outbound_ackno, outbound_win);
 
-        // if segment_out is empty, generate a empty segment, seg.length_in_sequence_space() != 0 is to filter only ack segment
+        // if segment_out is empty, generate a empty segment, seg.length_in_sequence_space() != 0 is to ignore only ack segment
         if (_sender.segments_out().empty() == true && seg.length_in_sequence_space() != 0)
         {
             _sender.send_empty_segment();
             _sender.segments_out().front().header().seqno = _sender.next_seqno();
         }
-        
+
         // populate the fields and send out
         while (_sender.segments_out().empty() == false)
         {
             TCPSegment segment_out = _sender.segments_out().front();
             _sender.segments_out().pop();
-            segment_out.header().ackno = _receiver.ackno().value();
+            if (_receiver.ackno().has_value()) {
+                segment_out.header().ackno = _receiver.ackno().value();
+                segment_out.header().ack = true;
+            }
             segment_out.header().win = _receiver.window_size();
-            segment_out.header().ack = true;
 
             _segments_out.push(segment_out);
         }
 
     }
 
-    /* if passive tear down */
+    /* passive tear down when sender still has bytes while receiver has already been input ended */
     if (_receiver.stream_out().input_ended() == true && _sender.stream_in().eof() == false)
     {
         _linger_after_streams_finish = false;
@@ -107,10 +112,12 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     {
         if (_linger_after_streams_finish == false)
         {
-            active() = false;
+            sponge_log(LOG_INFO, "passive tear down, set active to false directly");
+            set_active(false);
         }
         else
         {
+            sponge_log(LOG_INFO, "active tear down, go to lingering");
             _is_lingering = true;
         }
     }
@@ -120,7 +127,7 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
 
 bool TCPConnection::active() const { return _active; }
 
-bool &TCPConnection::active() { return _active; }
+void TCPConnection::set_active(bool val) { _active = val; return; }
 
 size_t TCPConnection::write(const string &data) {
     ByteStream &bs = _sender.stream_in();
@@ -135,9 +142,11 @@ size_t TCPConnection::write(const string &data) {
     {
         TCPSegment segment_out = _sender.segments_out().front();
         _sender.segments_out().pop();
-        segment_out.header().ackno = _receiver.ackno().value();
+        if (_receiver.ackno().has_value()) {
+            segment_out.header().ackno = _receiver.ackno().value();
+            segment_out.header().ack = true;
+        }
         segment_out.header().win = _receiver.window_size();
-        segment_out.header().ack = true;
         _segments_out.push(segment_out);
     }
 
@@ -147,7 +156,7 @@ size_t TCPConnection::write(const string &data) {
 //! \param[in] ms_since_last_tick number of milliseconds since the last call to this method
 void TCPConnection::tick(const size_t ms_since_last_tick) {
     // pass time to timer
-    _timer.time_passed() += ms_since_last_tick;
+    _timer.update_time_by_last_time_passed(ms_since_last_tick);
 
     /* pass the time to sender, send out if sender send new segs */
     _sender.tick(ms_since_last_tick);
@@ -155,6 +164,7 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     /* if consective retransmission larger than the limit*/
     if (_sender.consecutive_retransmissions() > _cfg.MAX_RETX_ATTEMPTS)
     {
+        sponge_log(LOG_ERR, "consective retransmission larger than the limit");
         // send segment with RST and abort the connection
         _sender.send_empty_segment();
         TCPSegment seg = _sender.segments_out().front();
@@ -168,7 +178,7 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
         _receiver.stream_out().set_error();
 
         // end the connection
-        active() = false;
+        set_active(false);
 
         return;
     }
@@ -179,16 +189,19 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
         _sender.segments_out().pop();
 
         // set ackno and window size calculated by receiver
-        segment_out.header().ackno = _receiver.ackno().value();
+        if (_receiver.ackno().has_value()) {
+            segment_out.header().ackno = _receiver.ackno().value();
+            segment_out.header().ack = true;
+        }
         segment_out.header().win = _receiver.window_size();
-        segment_out.header().ack = true;
         _segments_out.push(segment_out);
     }
 
     /* if lingering time is passed, cleanly end the connection */
     if (_is_lingering && time_since_last_segment_received() >= 10 * _cfg.rt_timeout)
     {
-        active() = false;
+        sponge_log(LOG_INFO, "lingering time is passed, cleanly end the connection");
+        set_active(false);
     }
     
     return;
@@ -198,6 +211,7 @@ void TCPConnection::end_input_stream() {
     // need to send fin sync
     ByteStream &bs = _sender.stream_in();
     bs.end_input();
+    sponge_log(LOG_INFO,"end input stream, sequence number of Fin should be: %lu", _sender.get_isn() + bs.bytes_written() + 1);
 
     // send fin segment intermediately
     _sender.fill_window();
@@ -207,9 +221,11 @@ void TCPConnection::end_input_stream() {
         TCPSegment segment_out = _sender.segments_out().front();
         _sender.segments_out().pop();
         // set ackno and window size calculated by receiver
-        segment_out.header().ackno = _receiver.ackno().value();
+        if (_receiver.ackno().has_value()) {
+            segment_out.header().ackno = _receiver.ackno().value();
+            segment_out.header().ack = true;
+        }
         segment_out.header().win = _receiver.window_size();
-        segment_out.header().ack = true;
         _segments_out.push(segment_out);
     }
 
@@ -217,6 +233,7 @@ void TCPConnection::end_input_stream() {
 }
 
 void TCPConnection::connect() {
+    sponge_log(LOG_INFO, "active connection with peer");
     _sender.fill_window();
 
     if (_sender.segments_out().empty() == false)
