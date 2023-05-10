@@ -86,7 +86,7 @@ TCPSegment TCPSender::make_segment(size_t len, bool test) {
     {
         payload = _stream.read(len);
         TCPSegment seg;
-        seg.payload() = Buffer(payload.data());
+        seg.payload() = Buffer(std::move(payload));
         uint64_t abs_seqno = index + 1;
         seg.header().seqno = wrap(abs_seqno, _isn);
 
@@ -103,8 +103,7 @@ TCPSegment TCPSender::make_segment(size_t len, bool test) {
     {
         payload = _stream.read(len);
         TCPSegment seg;
-        // seg.payload() = Buffer{_stream.read(len)};
-        seg.payload() = Buffer(payload);
+        seg.payload() = Buffer(std::move(payload));
 
         if (_first_send == true)    // the first segment
         {
