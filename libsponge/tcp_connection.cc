@@ -28,6 +28,8 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     /* if there is RST flag, set error state and kill the connection */
     if (header.rst == true)
     {
+        sponge_log(LOG_INFO, "receive RST flag from peer, %d", seg.header().sport);
+        sponge_log(LOG_INFO, "mark streams with error, and set active to false directly");
         _sender.stream_in().set_error();
         _receiver.stream_out().set_error();
 
@@ -40,11 +42,11 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     {
         if (header.syn == false)
         {
-            sponge_log(LOG_ERR, "there expected to be a syn");
+            sponge_log(LOG_ERR, "assume it is the first received segment, but no syn flat");
             return;
         }
 
-        sponge_log(LOG_INFO, "passive connection from peer, %d", seg.header().sport);
+        sponge_log(LOG_INFO, "passive connection from peer, header: %s", seg.header().summary().c_str());
         _receiver.segment_received(seg);
         _sender.fill_window();
 
@@ -71,6 +73,7 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
     }
     else    // not the first segment
     {
+        // sponge_log(LOG_INFO, "receive message from peer, header: %s, length: %lu", seg.header().summary().c_str(), seg.length_in_sequence_space());
         _receiver.segment_received(seg);
 
         const WrappingInt32 outbound_ackno = header.ackno;
@@ -96,6 +99,8 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
                 segment_out.header().ack = true;
             }
             segment_out.header().win = _receiver.window_size();
+            // sponge_log(LOG_INFO, "send message to peer, header: %s, length: %lu", segment_out.header().summary().c_str(), seg.length_in_sequence_space());
+
 
             _segments_out.push(segment_out);
         }
@@ -108,7 +113,8 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
         _linger_after_streams_finish = false;
     }
 
-    if (inbound_stream_ended() == true && outbound_stream_ended_fin_sent_acked() == true)  // sender's fin is acked
+    /* inbound stream ends input and also sender's fin is acked */
+    if (inbound_stream_ended() == true && outbound_stream_ended_fin_sent_acked() == true)
     {
         if (_linger_after_streams_finish == false)
         {
@@ -121,7 +127,7 @@ void TCPConnection::segment_received(const TCPSegment &seg) {
             _is_lingering = true;
         }
     }
-    
+
     return;
 }
 
@@ -164,7 +170,8 @@ void TCPConnection::tick(const size_t ms_since_last_tick) {
     /* if consective retransmission larger than the limit*/
     if (_sender.consecutive_retransmissions() > _cfg.MAX_RETX_ATTEMPTS)
     {
-        sponge_log(LOG_ERR, "consective retransmission larger than the limit");
+        sponge_log(LOG_INFO, "consective retransmission larger than the limit");
+        sponge_log(LOG_INFO, "send segment with RST flag, and set active to false");
         // send segment with RST and abort the connection
         _sender.send_empty_segment();
         TCPSegment seg = _sender.segments_out().front();
@@ -233,7 +240,6 @@ void TCPConnection::end_input_stream() {
 }
 
 void TCPConnection::connect() {
-    sponge_log(LOG_INFO, "active connection with peer");
     _sender.fill_window();
 
     if (_sender.segments_out().empty() == false)
@@ -245,8 +251,10 @@ void TCPConnection::connect() {
     }
     else
     {
-        sponge_log(LOG_ERR, "Expect one segment, but got no");
+        sponge_log(LOG_ERR, "expect one segment, but got no");
     }
+
+    sponge_log(LOG_INFO, "active connection with peer, header: %s", _segments_out.front().header().summary().c_str());
 
     return;
 }

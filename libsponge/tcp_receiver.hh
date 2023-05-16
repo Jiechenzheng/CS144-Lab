@@ -5,6 +5,7 @@
 #include "stream_reassembler.hh"
 #include "tcp_segment.hh"
 #include "wrapping_integers.hh"
+#include "log.h"
 
 #include <optional>
 

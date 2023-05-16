@@ -76,7 +76,7 @@ class TCPSender {
     // the window size of receiver
     size_t _rcv_window_size{1};
 
-    size_t _rcv_window_free_space{0};
+    size_t _rcv_window_stream_free_space{0};
 
     // if it is the first segment
     bool _first_send{true};
@@ -84,7 +84,7 @@ class TCPSender {
     bool _fin_sent{false};
 
     // stream bytes in flight
-    size_t _bytes_in_flight{0};
+    size_t _abs_bytes_in_flight{0};
 
     uint64_t _checkpoint{0};
 
