@@ -23,7 +23,7 @@ using namespace std;
 //! \param[in] ip_address IP (what ARP calls "protocol") address of the interface
 NetworkInterface::NetworkInterface(const EthernetAddress &ethernet_address, const Address &ip_address)
     : _ethernet_address(ethernet_address), _ip_address(ip_address), _timer(0) {
-    _timer.if_start() = true;
+    _timer.set_start(true);
     cerr << "DEBUG: Network interface has Ethernet address " << to_string(_ethernet_address) << " and IP address "
          << ip_address.ip() << "\n";
 }
@@ -214,7 +214,7 @@ void NetworkInterface::recv_ARP_datagram(const EthernetFrame &frame)
 //! \param[in] ms_since_last_tick the number of milliseconds since the last call to this method
 void NetworkInterface::tick(const size_t ms_since_last_tick)
 {
-    _timer.time_passed() += ms_since_last_tick;
+    _timer.update_time_by_last_time_passed(ms_since_last_tick);
 
     for (auto it = _addr_mapping.begin(); it != _addr_mapping.end(); it++)
     {
