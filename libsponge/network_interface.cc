@@ -37,29 +37,32 @@ void NetworkInterface::send_datagram(const InternetDatagram &dgram, const Addres
 
     auto found = _addr_mapping.find(next_hop_ip);
 
-    if (found == _addr_mapping.end())   // not found
+    if (found == _addr_mapping.end())   // not found in the mapping
     {
+        // insert into map
         EthernetAddress tmp = {};
-        // TODO: What if the key has already been map, will std::map filter it? Anser: it won't insert it.
         _addr_mapping.insert({next_hop_ip, std::make_pair(tmp, 0)});
+        // put into the queue
         _internet_datagram_out.push_back(std::make_pair(dgram, next_hop));
+        // send ARP request for ethernet address of this ip
         send_ARP_datagram_request(next_hop);
     }
     else
     {
         const EthernetAddress &next_hop_ethernet_addr = (*found).second.first;
         int &life_time = (*found).second.second;
-        if (next_hop_ethernet_addr.empty())
+        if (next_hop_ethernet_addr.empty()) // this ethernet address is actually empty
         {
             _internet_datagram_out.push_back(std::make_pair(dgram, next_hop));
             if (life_time < -ARP_RETX_TIMEOUT)
             {
+                sponge_log(LOG_INFO, "ARP request timeout. resent.");
                 send_ARP_datagram_request(next_hop);
                 // update the latest life time
                 life_time = 0;
             }
         }
-        else
+        else    // found the the ethernet address in the mapping, so send IP datagram
         {
             send_IP_datagram(dgram, next_hop_ethernet_addr);
         }
@@ -128,19 +131,19 @@ void NetworkInterface::send_ARP_datagram_reply(const uint32_t &next_hop)
 optional<InternetDatagram> NetworkInterface::recv_frame(const EthernetFrame &frame) {
     if (frame.header().dst != ETHERNET_BROADCAST && frame.header().dst != _ethernet_address)
     {
-        sponge_log(LOG_INFO, "the frame destination is neither broadcast nor the class own ethernet address");
+        sponge_log(LOG_INFO, "the frame destination is neither broadcast nor my ethernet address");
         return {};
     }
-    
+
     if (frame.header().type == EthernetHeader::TYPE_IPv4)
     {
-        InternetDatagram dgram = recv_IP_datagram(frame).value();
-        return dgram;
+        return recv_IP_datagram(frame);
     }
     else if (frame.header().type == EthernetHeader::TYPE_ARP)
     {
         recv_ARP_datagram(frame);
         return {};
+        // TODO: I want to check if ARP datagram is request or reply datagram in code block here
     }
     else
     {
@@ -191,6 +194,7 @@ void NetworkInterface::recv_ARP_datagram(const EthernetFrame &frame)
             }
             
             // send the internet datagram vector
+            int sent = 0;
             for (auto it = _internet_datagram_out.begin(); it != _internet_datagram_out.end(); it++)
             {
                 if ((*it).second.ipv4_numeric() == arpmsg.sender_ip_address)
@@ -198,8 +202,17 @@ void NetworkInterface::recv_ARP_datagram(const EthernetFrame &frame)
                     send_datagram((*it).first, (*it).second);
                     // get rid from vector after sent
                     it = _internet_datagram_out.erase(it);
+                    sent++;
                 }
             }
+            if (sent == 0)
+            {
+                sponge_log(LOG_INFO, "get ARP reply datagram, but sent no IP datagram");
+            }
+        }
+        else
+        {
+            sponge_log(LOG_ERR, "unknown opcode in ARP message");
         }
         
         return;
@@ -218,7 +231,7 @@ void NetworkInterface::tick(const size_t ms_since_last_tick)
 
     for (auto it = _addr_mapping.begin(); it != _addr_mapping.end(); it++)
     {
-        // update time in address mapping and discard ones out of their life cycles (30 seconds / 30000 ms)
+        // update time in address mapping and discard ones out of their life cycles (30 seconds/30000 ms)
         if ((*it).second.first.empty() == false)
         {
             (*it).second.second += ms_since_last_tick;
