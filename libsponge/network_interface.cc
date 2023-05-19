@@ -5,6 +5,7 @@
 #include "log.h"
 
 #include <iostream>
+#include <algorithm>
 
 // Dummy implementation of a network interface
 // Translates from {IP datagram, next hop address} to link-layer frame, and from link-layer frame to IP datagram
@@ -18,6 +19,20 @@ template <typename... Targs>
 void DUMMY_CODE(Targs &&... /* unused */) {}
 
 using namespace std;
+
+static bool ethernet_address_is_all_zero(const EthernetAddress &val)
+{
+    bool res = 1;
+    for (auto it = val.begin(); it != val.end(); it++)
+    {
+        if ((*it) != static_cast<std::uint8_t>(0))
+        {
+            res = 0;
+            break;
+        }
+    }
+    return res;
+}
 
 //! \param[in] ethernet_address Ethernet (what ARP calls "hardware") address of the interface
 //! \param[in] ip_address IP (what ARP calls "protocol") address of the interface
@@ -51,7 +66,7 @@ void NetworkInterface::send_datagram(const InternetDatagram &dgram, const Addres
     {
         const EthernetAddress &next_hop_ethernet_addr = (*found).second.first;
         int &life_time = (*found).second.second;
-        if (next_hop_ethernet_addr.empty()) // this ethernet address is actually empty
+        if (ethernet_address_is_all_zero(next_hop_ethernet_addr)) // this ethernet address is actually empty
         {
             _internet_datagram_out.push_back(std::make_pair(dgram, next_hop));
             if (life_time < -ARP_RETX_TIMEOUT)
@@ -241,7 +256,7 @@ void NetworkInterface::tick(const size_t ms_since_last_tick)
     for (auto it = _addr_mapping.begin(); it != _addr_mapping.end();)
     {
         // update time in address mapping and discard ones out of their life cycles (30 seconds/30000 ms)
-        if ((*it).second.first.empty() == false)
+        if (ethernet_address_is_all_zero((*it).second.first) == false)
         {
             (*it).second.second += ms_since_last_tick;
             // remove the one out of its life cycle
