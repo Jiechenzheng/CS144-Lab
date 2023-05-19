@@ -192,6 +192,11 @@ void NetworkInterface::recv_ARP_datagram(const EthernetFrame &frame)
             {
                 _addr_mapping.insert({arpmsg.sender_ip_address, std::make_pair(arpmsg.sender_ethernet_address, 0)});
             }
+            else
+            {
+                (*search).second.first = arpmsg.sender_ethernet_address;
+                (*search).second.second = 0;
+            }
 
             // send the internet datagram vector
             int sent = 0;
