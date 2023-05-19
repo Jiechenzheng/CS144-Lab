@@ -192,17 +192,21 @@ void NetworkInterface::recv_ARP_datagram(const EthernetFrame &frame)
             {
                 _addr_mapping.insert({arpmsg.sender_ip_address, std::make_pair(arpmsg.sender_ethernet_address, 0)});
             }
-            
+
             // send the internet datagram vector
             int sent = 0;
-            for (auto it = _internet_datagram_out.begin(); it != _internet_datagram_out.end(); it++)
+            for (auto it = _internet_datagram_out.begin(); it != _internet_datagram_out.end();)
             {
                 if ((*it).second.ipv4_numeric() == arpmsg.sender_ip_address)
                 {
                     send_datagram((*it).first, (*it).second);
+                    sent++;
                     // get rid from vector after sent
                     it = _internet_datagram_out.erase(it);
-                    sent++;
+                }
+                else
+                {
+                    it++;
                 }
             }
             if (sent == 0)
@@ -229,18 +233,26 @@ void NetworkInterface::tick(const size_t ms_since_last_tick)
 {
     _timer.update_time_by_last_time_passed(ms_since_last_tick);
 
-    for (auto it = _addr_mapping.begin(); it != _addr_mapping.end(); it++)
+    for (auto it = _addr_mapping.begin(); it != _addr_mapping.end();)
     {
         // update time in address mapping and discard ones out of their life cycles (30 seconds/30000 ms)
         if ((*it).second.first.empty() == false)
         {
             (*it).second.second += ms_since_last_tick;
             // remove the one out of its life cycle
-            if ((*it).second.second > LIFETIME_IN_ADDR_MAPPING) it = _addr_mapping.erase(it);
+            if ((*it).second.second > LIFETIME_IN_ADDR_MAPPING)
+            {
+                it = _addr_mapping.erase(it);
+            }
+            else
+            {
+                it++;
+            }
         }
         else
         {
             (*it).second.second -= ms_since_last_tick;
+            it++;
         }
     }
 
