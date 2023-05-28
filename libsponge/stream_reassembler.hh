@@ -4,16 +4,24 @@
 #include "byte_stream.hh"
 
 #include <cstdint>
+#include <deque>
 #include <string>
+#include <utility>
 
 //! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
 //! possibly overlapping) into an in-order byte stream.
 class StreamReassembler {
   private:
     // Your code here -- add private members as necessary.
-
+    std::deque<std::pair<char, bool>> _unreass_buffer;
+    size_t _first_unreass_index;
+    size_t _unreass_cap;
     ByteStream _output;  //!< The reassembled in-order byte stream
     size_t _capacity;    //!< The maximum number of bytes
+    bool _eof;
+    int _last_byte_index;
+
+    void check_contiguous();
 
   public:
     //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
