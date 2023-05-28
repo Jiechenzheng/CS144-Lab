@@ -22,6 +22,8 @@ using namespace std;
 
 static bool ethernet_address_is_all_zero(const EthernetAddress &val)
 {
+    // TODO: try to use lambda function
+    // std::find(val.begin(), val.end(), true);    // this time, true will be 1, not others be true
     bool res = 1;
     for (auto it = val.begin(); it != val.end(); it++)
     {
