@@ -1,6 +1,7 @@
 #include "router.hh"
 
 #include <iostream>
+#include <cmath>
 
 using namespace std;
 
@@ -29,14 +30,37 @@ void Router::add_route(const uint32_t route_prefix,
     cerr << "DEBUG: adding route " << Address::from_ipv4_numeric(route_prefix).ip() << "/" << int(prefix_length)
          << " => " << (next_hop.has_value() ? next_hop->ip() : "(direct)") << " on interface " << interface_num << "\n";
 
-    DUMMY_CODE(route_prefix, prefix_length, next_hop, interface_num);
-    // Your code here.
+    // TODO: difference between std::make_tuple and std::tuple<.., .., ., ..>{} for initializer
+    _routing_table.emplace_back(std::make_tuple(route_prefix, prefix_length, next_hop, interface_num));
+
+    return;
 }
 
 //! \param[in] dgram The datagram to be routed
 void Router::route_one_datagram(InternetDatagram &dgram) {
-    DUMMY_CODE(dgram);
-    // Your code here.
+    const uint32_t &dst_ip_address = dgram.header().dst;
+
+    auto entry = find_longest_prefix_match(dst_ip_address);
+
+    if (entry == _routing_table.end())
+    {
+        sponge_log(LOG_INFO, "no entry for this dst ip in the routing table");
+        return;
+    }
+    else
+    {
+        dgram.header().ttl--;
+        // TODO: need to ask the reference thing. Do I use too much reference?
+        AsyncNetworkInterface &async_interface = interface(std::get<3>(*entry));
+        if (std::get<2>(*entry).has_value())
+            async_interface.send_datagram(dgram, std::get<2>(*entry).value());
+        else    // means the router is connected to the destination network, don't need to transfer to other router
+            async_interface.send_datagram(dgram, Address::from_ipv4_numeric(dgram.header().dst));
+
+        return;
+    }
+
+    return;
 }
 
 void Router::route() {
@@ -48,4 +72,30 @@ void Router::route() {
             queue.pop();
         }
     }
+}
+
+std::vector<std::tuple<uint32_t, uint8_t, std::optional<Address>, size_t>>::iterator Router::find_longest_prefix_match(
+    const uint32_t &ip) {
+    
+    auto find = _routing_table.end();
+    size_t match_length = 0;
+
+    for (auto it = _routing_table.begin(); it != _routing_table.end(); it++) {
+        size_t match_length_tmp = match_size(ip, std::get<0>(*it), std::get<1>(*it));
+        if (match_length_tmp > match_length)
+        {
+            match_length = match_length_tmp;
+            find = it;
+        }
+    }
+
+    return find;
+}
+
+size_t Router::match_size(const uint32_t &ip, const uint32_t route_prefix, const uint8_t prefix_length) {
+    uint32_t res = ip ^ route_prefix;
+    
+    size_t match_length = 32 - ceil(log2(res));
+    
+    return match_length >= prefix_length ? match_length : 0;
 }
