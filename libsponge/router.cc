@@ -78,10 +78,10 @@ std::vector<std::tuple<uint32_t, uint8_t, std::optional<Address>, size_t>>::iter
     const uint32_t &ip) {
     
     auto find = _routing_table.end();
-    size_t match_length = 0;
+    int match_length = -1;
 
     for (auto it = _routing_table.begin(); it != _routing_table.end(); it++) {
-        size_t match_length_tmp = match_size(ip, std::get<0>(*it), std::get<1>(*it));
+        int match_length_tmp = match_size(ip, std::get<0>(*it), std::get<1>(*it));
         if (match_length_tmp > match_length)
         {
             match_length = match_length_tmp;
@@ -94,8 +94,15 @@ std::vector<std::tuple<uint32_t, uint8_t, std::optional<Address>, size_t>>::iter
 
 size_t Router::match_size(const uint32_t &ip, const uint32_t route_prefix, const uint8_t prefix_length) {
     uint32_t res = ip ^ route_prefix;
-    
-    size_t match_length = 32 - ceil(log2(res));
-    
-    return match_length >= prefix_length ? match_length : 0;
+
+    int match_length = 32 - ceil(log2(res)+0.0001);
+
+    if (route_prefix == 0)
+    {
+        return 0;
+    }
+    else
+    {
+        return match_length >= prefix_length ? match_length : 0;
+    }
 }
