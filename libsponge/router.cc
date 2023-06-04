@@ -49,7 +49,12 @@ void Router::route_one_datagram(InternetDatagram &dgram) {
     }
     else
     {
-        dgram.header().ttl--;
+        // prevent uint8(0) -1
+        if (dgram.header().ttl <= 1)
+            return;
+        else
+            dgram.header().ttl--;
+
         // TODO: need to ask the reference thing. Do I use too much reference?
         AsyncNetworkInterface &async_interface = interface(std::get<3>(*entry));
         if (std::get<2>(*entry).has_value())
